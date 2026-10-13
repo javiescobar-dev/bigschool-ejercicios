@@ -35,3 +35,22 @@ export interface SentEmail {
   subject: string
   body: string
 }
+
+export interface InvoiceLine {
+  description: string
+  quantity: number
+  total: number
+}
+
+export interface CalculatedOrder {
+  orderId: string
+  customer: Customer
+  lines: InvoiceLine[]
+  subtotal: number
+  discount: number
+  fee: number
+  shipping: number
+  taxAmount: number
+  taxRate: number
+  total: number
+}
