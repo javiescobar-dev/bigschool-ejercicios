@@ -1,5 +1,5 @@
-export type CustomerType = 'standard' | 'premium' | 'vip' | 'employee'
-export type PaymentMethod = 'card' | 'paypal' | 'transfer'
+export type CustomerType = 'standard' | 'premium' | 'vip' | 'employee' | 'partner'
+export type PaymentMethod = 'card' | 'paypal' | 'transfer' | 'bizum'
 
 export interface Customer {
   id: string

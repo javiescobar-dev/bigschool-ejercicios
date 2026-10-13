@@ -22,8 +22,15 @@ export class TransferFeePolicy implements FeePolicy {
     }
 }
 
+export class BizumFeePolicy implements FeePolicy {
+    feeFor(afterDiscount: number): number {
+        return afterDiscount * 0.005
+    }
+}
+
 export const feePolicies: Record<PaymentMethod, FeePolicy> = {
     card:     new CardFeePolicy(),
     paypal:   new PaypalFeePolicy(),
     transfer: new TransferFeePolicy(),
+    bizum:    new BizumFeePolicy(),
 }

@@ -32,9 +32,16 @@ export class EmployeeDiscount implements DiscountPolicy {
   }
 }
 
+export class PartnerDiscount implements DiscountPolicy {
+  discountFor(subtotal: number): number {
+    return subtotal * 0.15
+  }
+}
+
 export const discountPolicies: Record<CustomerType, DiscountPolicy> = {
   standard: new StandardDiscount(),
   premium:  new PremiumDiscount(),
   vip:      new VipDiscount(),
   employee: new EmployeeDiscount(),
+  partner:  new PartnerDiscount(),
 }
