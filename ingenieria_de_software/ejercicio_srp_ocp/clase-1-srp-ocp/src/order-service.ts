@@ -3,7 +3,7 @@ import { emailGateway } from './infra/email-gateway.ts'
 import type { Order } from './types.ts'
 import { OrderValidator } from './validation/order-validator.ts'
 import { OrderCalculator } from './pricing/order-calculator.ts'
-
+import { invoiceFormatters } from './invoice/formatter.ts'
 /**
  * Servicio de pedidos de PedidoExpress.
  *
@@ -15,6 +15,7 @@ export class OrderService {
   constructor(
     private readonly validator = new OrderValidator(),
     private readonly calculator = new OrderCalculator(),
+    private readonly formatters = invoiceFormatters,
   ) {}
 
   processOrder(order: Order): string {
@@ -25,21 +26,7 @@ export class OrderService {
     const calculatedOrder = this.calculator.calculate(order)
 
     // ---------- Factura en texto ----------
-    let invoice = ''
-    invoice += `FACTURA ${calculatedOrder.orderId}\n`
-    invoice += `Cliente: ${calculatedOrder.customer.name} <${calculatedOrder.customer.email}>\n`
-    invoice += `${'-'.repeat(40)}\n`
-    for (const line of calculatedOrder.lines) {
-        const lineTotal = line.total.toFixed(2)
-        invoice += `${line.quantity} x ${line.description} ... ${lineTotal} EUR\n`
-    }
-    invoice += `${'-'.repeat(40)}\n`
-    invoice += `Subtotal: ${calculatedOrder.subtotal.toFixed(2)} EUR\n`
-    invoice += `Descuento: -${calculatedOrder.discount.toFixed(2)} EUR\n`
-    invoice += `Comisión de pago: ${calculatedOrder.fee.toFixed(2)} EUR\n`
-    invoice += `Envío: ${calculatedOrder.shipping.toFixed(2)} EUR\n`
-    invoice += `IVA (${Math.round(calculatedOrder.taxRate * 100)}%): ${calculatedOrder.taxAmount.toFixed(2)} EUR\n`
-    invoice += `TOTAL: ${calculatedOrder.total.toFixed(2)} EUR\n`
+    const invoice = this.formatters.text.format(calculatedOrder)
 
     // ---------- Persistencia ----------
     database.insertOrder({
@@ -62,21 +49,10 @@ export class OrderService {
   /**
    * Exporta la factura de un pedido ya calculado en distintos formatos.
    */
-  exportInvoice(order: Order, format: 'text' | 'html' | 'csv'): string {
-    const invoice = this.processOrder(order)
-
-    if (format === 'text') {
-      return invoice
-    } else if (format === 'html') {
-      return `<pre>${invoice}</pre>`
-    } else if (format === 'csv') {
-      return invoice
-        .split('\n')
-        .filter((line) => line.includes('...'))
-        .map((line) => line.replace(' ... ', ';'))
-        .join('\n')
-    } else {
-      throw new Error(`Formato no soportado: ${format}`)
-    }
+  exportInvoice(order: Order, format: string): string {
+    const calculatedOrder = this.calculator.calculate(order)
+    const formatter = this.formatters[format]
+    if (!formatter) throw new Error(`Formato no soportado: ${format}`)
+    return formatter.format(calculatedOrder)
   }
 }
