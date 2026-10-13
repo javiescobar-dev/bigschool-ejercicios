@@ -1,6 +1,7 @@
 import { database } from './infra/database.ts'
 import { emailGateway } from './infra/email-gateway.ts'
 import type { Order } from './types.ts'
+import { OrderValidator } from './validation/order-validator.ts'
 
 const TAX_RATE = 0.21
 
@@ -12,22 +13,11 @@ const TAX_RATE = 0.21
  * cliente por email.
  */
 export class OrderService {
+  constructor(private readonly validator = new OrderValidator()) {}
+
   processOrder(order: Order): string {
     // ---------- Validación ----------
-    if (order.lines.length === 0) {
-      throw new Error('El pedido no tiene líneas')
-    }
-    if (!order.customer.email.includes('@')) {
-      throw new Error(`Email inválido: ${order.customer.email}`)
-    }
-    for (const line of order.lines) {
-      if (line.quantity <= 0) {
-        throw new Error(`Cantidad inválida en ${line.sku}`)
-      }
-      if (line.unitPrice < 0) {
-        throw new Error(`Precio inválido en ${line.sku}`)
-      }
-    }
+    this.validator.validate(order)
 
     // ---------- Subtotal ----------
     let subtotal = 0
