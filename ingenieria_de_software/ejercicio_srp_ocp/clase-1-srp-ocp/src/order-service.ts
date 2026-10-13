@@ -1,9 +1,10 @@
-import { database } from './infra/database.ts'
-import { emailGateway } from './infra/email-gateway.ts'
 import type { Order } from './types.ts'
 import { OrderValidator } from './validation/order-validator.ts'
 import { OrderCalculator } from './pricing/order-calculator.ts'
 import { invoiceFormatters } from './invoice/formatter.ts'
+import { OrderRepository } from './order-repository.ts'
+import { OrderNotifier } from './order-notifier.ts'
+
 /**
  * Servicio de pedidos de PedidoExpress.
  *
@@ -16,6 +17,8 @@ export class OrderService {
     private readonly validator = new OrderValidator(),
     private readonly calculator = new OrderCalculator(),
     private readonly formatters = invoiceFormatters,
+    private readonly repository = new OrderRepository(),
+    private readonly notifier = new OrderNotifier(),
   ) {}
 
   processOrder(order: Order): string {
@@ -29,19 +32,10 @@ export class OrderService {
     const invoice = this.formatters.text.format(calculatedOrder)
 
     // ---------- Persistencia ----------
-    database.insertOrder({
-      id: calculatedOrder.orderId,
-      customerId: calculatedOrder.customer.id,
-      total: calculatedOrder.total,
-      createdAt: new Date('2024-01-15T10:00:00Z').toISOString(),
-    })
+    this.repository.save(calculatedOrder)
 
     // ---------- Notificación ----------
-    emailGateway.send(
-      calculatedOrder.customer.email,
-      `Tu pedido ${calculatedOrder.orderId} está confirmado`,
-      `Hola ${calculatedOrder.customer.name},\n\nGracias por tu compra.\n\n${invoice}`,
-    )
+    this.notifier.notify(calculatedOrder, invoice)
 
     return invoice
   }
