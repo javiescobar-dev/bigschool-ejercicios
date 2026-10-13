@@ -1,4 +1,7 @@
 import type { Order, CalculatedOrder, InvoiceLine } from '../types.ts'
+import { discountPolicies } from './discount-policies.ts'
+import { feePolicies } from './payment-fee-policies.ts'
+import { shipmentPolicies, InternationalShipmentPolicy } from './shipping-policies.ts'
 
 const TAX_RATE = 0.21
 
@@ -11,49 +14,15 @@ export class OrderCalculator {
         }
 
         // ---------- Descuento según el tipo de cliente ----------
-        let discount = 0
-        switch (order.customer.type) {
-            case 'standard':
-                discount = 0
-                break
-            case 'premium':
-                discount = subtotal * 0.1
-                break
-            case 'vip':
-                discount = subtotal * 0.2
-                if (subtotal > 1000) {
-                discount = subtotal * 0.25
-                }
-                break
-            case 'employee':
-                discount = subtotal * 0.35
-                break
-        }
+        const discount = discountPolicies[order.customer.type].discountFor(subtotal)
+        const afterDiscount = subtotal - discount
 
         // ---------- Comisión según el método de pago ----------
-        let fee = 0
-        const afterDiscount = subtotal - discount
-        switch (order.paymentMethod) {
-            case 'card':
-                fee = afterDiscount * 0.015
-                break
-            case 'paypal':
-                fee = afterDiscount * 0.029 + 0.3
-                break
-            case 'transfer':
-                fee = 0
-                break
-        }
+        const fee = feePolicies[order.paymentMethod].feeFor(afterDiscount)
 
         // ---------- Gastos de envío ----------
-        let shipping = 0
-        if (order.country === 'ES') {
-            shipping = afterDiscount >= 50 ? 0 : 4.95
-        } else if (order.country === 'PT' || order.country === 'FR') {
-            shipping = afterDiscount >= 80 ? 0 : 9.95
-        } else {
-            shipping = 24.95
-        }
+        const internationalShipment = new InternationalShipmentPolicy()
+        const shipping = (shipmentPolicies[order.country] ?? internationalShipment).shippingFor(afterDiscount)
 
         // ---------- Impuestos y total ----------
         const taxableBase = afterDiscount + fee + shipping
