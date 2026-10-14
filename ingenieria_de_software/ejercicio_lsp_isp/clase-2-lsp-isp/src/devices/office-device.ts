@@ -18,11 +18,25 @@ export class UnsupportedOperationError extends Error {
 export interface OfficeDevice {
   readonly id: string
   readonly model: string
-
   getStatus(): DeviceStatus
+}
+
+export interface Printer extends OfficeDevice {
   print(document: OfficeDocument, copies: number): PrintJob
+}
+
+export interface Scanner extends OfficeDevice {
   scan(pages: number): OfficeDocument
+}
+
+export interface FaxMachine extends OfficeDevice {
   fax(document: OfficeDocument, number: string): FaxReceipt
+}
+
+export interface Stapler extends OfficeDevice {
   staple(jobId: string): void
+}
+
+export interface TonerRefillable extends OfficeDevice {
   refillToner(grams: number): number
 }
