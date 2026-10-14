@@ -1,4 +1,4 @@
-import type { DeviceStatus, FaxReceipt, OfficeDocument, PrintJob } from '../types.ts'
+import type { DeviceStatus, OfficeDocument, PrintJob } from '../types.ts'
 import type { Printer } from './office-device.ts'
 
 /** Impresora de chorro de tinta de sobremesa. Solo imprime. */

@@ -1,7 +1,4 @@
-import { BasicInkjetPrinter } from './devices/basic-inkjet-printer.ts'
-import { MultifunctionPrinter } from './devices/multifunction-printer.ts'
-import { NetworkScanner } from './devices/network-scanner.ts'
-import { UnsupportedOperationError, type OfficeDevice } from './devices/office-device.ts'
+import { isFaxMachine, isPrinter, isScanner, isStapler, isTonerRefillable, type OfficeDevice } from './devices/office-device.ts'
 import type { FaxReceipt, OfficeDocument, PrintJob } from './types.ts'
 
 /**
@@ -13,41 +10,24 @@ export class OfficeWorkflow {
 
   printDocument(document: OfficeDocument, copies: number): PrintJob {
     for (const device of this.devices) {
-      if (device.getStatus() !== 'ready') continue
-      try {
-        return device.print(document, copies)
-      } catch (error) {
-        // Puede que este aparato no sepa imprimir. Solo hay una forma de
-        // averiguarlo: intentarlo y ver si explota.
-        if (error instanceof UnsupportedOperationError) continue
-        throw error
-      }
+      if (device.getStatus() !== 'ready' || !isPrinter(device)) continue
+      return device.print(document, copies)
     }
     throw new Error('No hay ningún dispositivo disponible capaz de imprimir')
   }
 
   digitize(pages: number): OfficeDocument {
     for (const device of this.devices) {
-      if (device.getStatus() !== 'ready') continue
-      try {
-        return device.scan(pages)
-      } catch (error) {
-        if (error instanceof UnsupportedOperationError) continue
-        throw error
-      }
+      if (device.getStatus() !== 'ready' || !isScanner(device)) continue
+      return device.scan(pages)
     }
     throw new Error('No hay ningún dispositivo disponible capaz de escanear')
   }
 
   sendFax(document: OfficeDocument, number: string): FaxReceipt {
     for (const device of this.devices) {
-      if (device.getStatus() !== 'ready') continue
-      try {
-        return device.fax(document, number)
-      } catch (error) {
-        if (error instanceof UnsupportedOperationError) continue
-        throw error
-      }
+      if (device.getStatus() !== 'ready' || !isFaxMachine(device)) continue
+      return device.fax(document, number)
     }
     throw new Error('No hay ningún dispositivo disponible capaz de enviar faxes')
   }
@@ -55,11 +35,8 @@ export class OfficeWorkflow {
   printAndStaple(document: OfficeDocument, copies: number): PrintJob {
     const job = this.printDocument(document, copies)
     const device = this.devices.find((candidate) => candidate.id === job.deviceId)
-    try {
+    if (device && isStapler(device)) {
       device?.staple(job.jobId)
-    } catch (error) {
-      // Si el aparato que ha impreso no grapa, se recoge sin grapar y ya.
-      if (!(error instanceof UnsupportedOperationError)) throw error
     }
     return job
   }
@@ -69,13 +46,13 @@ export class OfficeWorkflow {
    */
   capabilitiesReport(): string[] {
     return this.devices.map((device) => {
-      if (device instanceof MultifunctionPrinter) {
+      if (isPrinter(device) && isScanner(device) && isFaxMachine(device) && isStapler(device) && isTonerRefillable(device)) {
         return `${device.id} (${device.model}): imprime, escanea, faxea, grapa, tóner`
       }
-      if (device instanceof BasicInkjetPrinter) {
+      if (isPrinter(device)) {
         return `${device.id} (${device.model}): imprime`
       }
-      if (device instanceof NetworkScanner) {
+      if (isScanner(device)) {
         return `${device.id} (${device.model}): escanea`
       }
       return `${device.id} (${device.model}): desconocido`

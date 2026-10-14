@@ -1,4 +1,4 @@
-import type { DeviceStatus, FaxReceipt, OfficeDocument, PrintJob } from '../types.ts'
+import type { DeviceStatus, OfficeDocument } from '../types.ts'
 import type { Scanner } from './office-device.ts'
 
 /** Escáner de red de la sala de archivo. Solo digitaliza. */
