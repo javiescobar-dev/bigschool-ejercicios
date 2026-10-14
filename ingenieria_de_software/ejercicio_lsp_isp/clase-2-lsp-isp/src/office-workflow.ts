@@ -36,7 +36,7 @@ export class OfficeWorkflow {
     const job = this.printDocument(document, copies)
     const device = this.devices.find((candidate) => candidate.id === job.deviceId)
     if (device && isStapler(device)) {
-      device?.staple(job.jobId)
+      device.staple(job.jobId)
     }
     return job
   }
@@ -45,17 +45,22 @@ export class OfficeWorkflow {
    * Inventario de capacidades para el informe de mantenimiento.
    */
   capabilitiesReport(): string[] {
-    return this.devices.map((device) => {
-      if (isPrinter(device) && isScanner(device) && isFaxMachine(device) && isStapler(device) && isTonerRefillable(device)) {
-        return `${device.id} (${device.model}): imprime, escanea, faxea, grapa, tóner`
+    const report: string[] = []
+    for (const device of this.devices) {
+      const capabilities: string[] = []
+      if (isPrinter(device)) capabilities.push('imprime')
+      if (isScanner(device)) capabilities.push('escanea')
+      if (isFaxMachine(device)) capabilities.push('faxea')
+      if (isStapler(device)) capabilities.push('grapa')
+      if (isTonerRefillable(device)) capabilities.push('tóner')
+      if (capabilities.length > 0) {
+        report.push(`${device.id} (${device.model}): ${capabilities.join(', ')}`)
       }
-      if (isPrinter(device)) {
-        return `${device.id} (${device.model}): imprime`
+      else {
+        report.push(`${device.id} (${device.model}): desconocido`)
       }
-      if (isScanner(device)) {
-        return `${device.id} (${device.model}): escanea`
-      }
-      return `${device.id} (${device.model}): desconocido`
-    })
+    }
+
+    return report
   }
 }
