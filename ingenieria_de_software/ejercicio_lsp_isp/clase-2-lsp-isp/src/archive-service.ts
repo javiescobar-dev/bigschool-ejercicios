@@ -1,7 +1,5 @@
-import { ObjectBucketStorage } from './storage/object-bucket-storage.ts'
-import { ReadOnlyArchiveStorage } from './storage/read-only-archive-storage.ts'
-import type { DocumentStorage } from './storage/document-storage.ts'
 import type { OfficeDocument } from './types.ts'
+import { isWritable, type ReadableStorage } from './storage/document-storage.ts'
 
 export interface ArchiveResult {
   savedIn: string[]
@@ -13,29 +11,20 @@ export interface ArchiveResult {
  * las purgas por retención de datos.
  */
 export class ArchiveService {
-  constructor(private readonly storages: DocumentStorage[]) {}
+  constructor(private readonly storages: ReadableStorage[]) {}
 
   archive(document: OfficeDocument): ArchiveResult {
     const savedIn: string[] = []
     const skipped: string[] = []
 
     for (const storage of this.storages) {
-      // El archivo histórico hereda de DocumentStorage, pero si le llamas a
-      // save() revienta. Hay que apartarlo a mano antes de intentarlo.
-      if (storage instanceof ReadOnlyArchiveStorage) {
+      if (!isWritable(storage)) {
         skipped.push(storage.name)
         continue
       }
 
-      // Y el bucket rechaza nombres con espacios o largos, así que le
-      // preparamos una versión del documento hecha a su medida.
-      let candidate = document
-      if (storage instanceof ObjectBucketStorage) {
-        candidate = { ...document, name: document.name.replace(/\s+/g, '_').slice(0, 60) }
-      }
-
       try {
-        storage.save(candidate)
+        storage.save(document)
         savedIn.push(storage.name)
       } catch {
         skipped.push(storage.name)
@@ -49,10 +38,7 @@ export class ArchiveService {
     const removedFrom: string[] = []
 
     for (const storage of this.storages) {
-      const removed = storage.remove(id)
-      // No nos fiamos del valor devuelto: hay almacenes que dicen que sí han
-      // borrado y luego el documento sigue ahí. Lo comprobamos nosotros.
-      if (removed && storage.load(id) === null) {
+      if (isWritable(storage) && storage.remove(id)) {
         removedFrom.push(storage.name)
       }
     }

@@ -7,15 +7,10 @@ export class ObjectBucketStorage extends DocumentStorage {
   private readonly objects = new Map<string, OfficeDocument>()
 
   save(document: OfficeDocument): string {
-    // El proveedor rechaza las claves con espacios o de más de 60 caracteres.
-    if (/\s/.test(document.name)) {
-      throw new Error(`Clave inválida en el bucket: "${document.name}" contiene espacios`)
-    }
-    if (document.name.length > 60) {
-      throw new Error(`Clave inválida en el bucket: "${document.name}" supera los 60 caracteres`)
-    }
+    // El proveedor quita los espacios y recorta a 60 caracteres
+    const key = document.name.replace(/\s+/g, '_').slice(0, 60)
     this.objects.set(document.id, document)
-    return `s3://oficina/${document.name}`
+    return `s3://oficina/${key}`
   }
 
   load(id: string): OfficeDocument | null {
