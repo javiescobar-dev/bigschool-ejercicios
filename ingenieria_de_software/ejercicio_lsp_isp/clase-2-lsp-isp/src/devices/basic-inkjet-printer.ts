@@ -1,8 +1,8 @@
 import type { DeviceStatus, FaxReceipt, OfficeDocument, PrintJob } from '../types.ts'
-import { UnsupportedOperationError, type OfficeDevice } from './office-device.ts'
+import type { Printer } from './office-device.ts'
 
 /** Impresora de chorro de tinta de sobremesa. Solo imprime. */
-export class BasicInkjetPrinter implements OfficeDevice {
+export class BasicInkjetPrinter implements Printer {
   readonly model = 'Inkly 220'
   private jobCounter = 0
 
@@ -23,22 +23,5 @@ export class BasicInkjetPrinter implements OfficeDevice {
       copies,
       pages: document.pages * copies,
     }
-  }
-
-  scan(_pages: number): OfficeDocument {
-    throw new UnsupportedOperationError(this.model, 'scan')
-  }
-
-  fax(_document: OfficeDocument, _number: string): FaxReceipt {
-    throw new UnsupportedOperationError(this.model, 'fax')
-  }
-
-  staple(_jobId: string): void {
-    throw new UnsupportedOperationError(this.model, 'staple')
-  }
-
-  refillToner(_grams: number): number {
-    // Es de tinta, no de tóner. Devolvemos 0 para no romper a quien llame.
-    return 0
   }
 }

@@ -1,8 +1,8 @@
 import type { DeviceStatus, FaxReceipt, OfficeDocument, PrintJob } from '../types.ts'
-import type { OfficeDevice } from './office-device.ts'
+import type { Printer, Scanner, FaxMachine, Stapler, TonerRefillable } from './office-device.ts'
 
 /** Equipo multifunción de planta: imprime, escanea, envía fax y grapa. */
-export class MultifunctionPrinter implements OfficeDevice {
+export class MultifunctionPrinter implements Printer, Scanner, FaxMachine, Stapler, TonerRefillable {
   readonly model = 'Konika C3500'
   private jobCounter = 0
   private toner = 400
