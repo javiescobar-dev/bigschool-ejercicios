@@ -1,4 +1,4 @@
-import { isFaxMachine, isPrinter, isScanner, isStapler, isTonerRefillable, type OfficeDevice } from './devices/office-device.ts'
+import { isCutter, isFaxMachine, isPrinter, isScanner, isStapler, isTonerRefillable, type OfficeDevice } from './devices/office-device.ts'
 import type { FaxReceipt, OfficeDocument, PrintJob } from './types.ts'
 
 /**
@@ -41,6 +41,14 @@ export class OfficeWorkflow {
     return job
   }
 
+  cutDocument(document: OfficeDocument, pages: number): number {
+    for (const device of this.devices) {
+      if (device.getStatus() !== 'ready' || !isCutter(device)) continue
+      return device.cut(pages)
+    }
+    throw new Error('No hay ningún dispositivo disponible capaz de cortar documentos')
+  }
+
   /**
    * Inventario de capacidades para el informe de mantenimiento.
    */
@@ -53,6 +61,7 @@ export class OfficeWorkflow {
       if (isFaxMachine(device)) capabilities.push('faxea')
       if (isStapler(device)) capabilities.push('grapa')
       if (isTonerRefillable(device)) capabilities.push('tóner')
+      if (isCutter(device)) capabilities.push('corta')
       if (capabilities.length > 0) {
         report.push(`${device.id} (${device.model}): ${capabilities.join(', ')}`)
       }

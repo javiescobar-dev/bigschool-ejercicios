@@ -43,3 +43,10 @@ export interface TonerRefillable extends OfficeDevice {
 export function isTonerRefillable(device: OfficeDevice): device is TonerRefillable {
   return 'refillToner' in device
 }
+
+export interface Cutter extends OfficeDevice {
+  cut(pages: number): number
+}
+export function isCutter(device: OfficeDevice): device is Cutter {
+  return 'cut' in device
+}

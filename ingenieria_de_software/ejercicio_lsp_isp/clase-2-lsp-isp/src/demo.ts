@@ -1,5 +1,7 @@
 import { ArchiveService } from './archive-service.ts'
 import { BasicInkjetPrinter } from './devices/basic-inkjet-printer.ts'
+import { DesktopFax } from './devices/desktop-fax.ts'
+import { Guillotine } from './devices/guillotine.ts'
 import { MultifunctionPrinter } from './devices/multifunction-printer.ts'
 import { NetworkScanner } from './devices/network-scanner.ts'
 import { OfficeWorkflow } from './office-workflow.ts'
@@ -11,6 +13,8 @@ const workflow = new OfficeWorkflow([
   new NetworkScanner('archivo'),
   new BasicInkjetPrinter('recepcion'),
   new MultifunctionPrinter('planta-2'),
+  new DesktopFax('sala-archivo'),
+  new Guillotine('sala-archivo'),
 ])
 
 console.log('--- Parque de aparatos ---')
@@ -21,6 +25,12 @@ console.log('\nDigitalizado:', escaneado.id, `(${escaneado.pages} páginas)`)
 
 const job = workflow.printAndStaple(escaneado, 3)
 console.log('Impreso:', job)
+
+const fax = workflow.sendFax(escaneado, '+34 91 123 45 67')
+console.log('Fax enviado:', fax)
+
+const corte = workflow.cutDocument(escaneado, escaneado.pages)
+console.log('Corte de documento:', corte, 'páginas')
 
 const archive = new ArchiveService([
   new LocalDiskStorage(),
