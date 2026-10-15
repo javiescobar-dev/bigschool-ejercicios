@@ -1,3 +1,4 @@
+import type { UserRepository } from '../registration/ports.ts'
 import type { StoredUser } from '../types.ts'
 
 /**
@@ -9,7 +10,7 @@ import type { StoredUser } from '../types.ts'
  */
 const rows: StoredUser[] = []
 
-export class PostgresUserRepository {
+export class PostgresUserRepository implements UserRepository {
   private readonly connectionString = process.env.DATABASE_URL ?? 'postgres://localhost:5432/ofidocs'
 
   private assertConnection(): void {

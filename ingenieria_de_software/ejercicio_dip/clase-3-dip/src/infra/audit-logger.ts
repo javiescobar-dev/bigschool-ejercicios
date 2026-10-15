@@ -1,3 +1,5 @@
+import type { AuditLogger as AuditLoggerPort } from '../registration/ports.ts'
+
 export interface AuditEntry {
   level: 'info' | 'warn'
   message: string
@@ -10,7 +12,7 @@ const entries: AuditEntry[] = []
  * Registro de auditoría. Escribe por consola y guarda una copia en memoria
  * para que los tests puedan comprobar qué se ha registrado.
  */
-class AuditLogger {
+class AuditLogger implements AuditLoggerPort {
   info(message: string): void {
     const entry: AuditEntry = { level: 'info', message, at: new Date().toISOString() }
     entries.push(entry)

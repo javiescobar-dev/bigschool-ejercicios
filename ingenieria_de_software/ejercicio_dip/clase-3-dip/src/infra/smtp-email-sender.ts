@@ -1,3 +1,5 @@
+import type { NotificationSender } from '../registration/ports.ts'
+
 export interface SentEmail {
   to: string
   subject: string
@@ -12,7 +14,7 @@ export interface SentEmail {
  */
 const outbox: SentEmail[] = []
 
-export class SmtpEmailSender {
+export class SmtpEmailSender implements NotificationSender {
   private readonly host = process.env.SMTP_HOST ?? 'smtp.ofidocs.com'
   private readonly port = Number(process.env.SMTP_PORT ?? 587)
 
