@@ -2,10 +2,6 @@ import { createRegistrationService } from './registration/create-registration-se
 import { __allRows } from './infra/postgres-user-repository.ts'
 import { __sentEmails } from './infra/smtp-email-sender.ts'
 
-// OJO: este demo solo arranca porque package.json lo ejecuta con NODE_ENV=test.
-// Sin esa mentira, el repositorio y el SMTP se niegan a funcionar.
-process.env.FEATURE_WELCOME_EMAIL = 'true'
-
 const service = createRegistrationService()
 
 const alta = service.register({
