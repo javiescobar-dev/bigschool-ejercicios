@@ -1,11 +1,18 @@
-import { auditLogger } from '../infra/audit-logger.ts'
-import { isFeatureEnabled } from '../infra/feature-flags.ts'
-import { PasswordHasher } from '../infra/password-hasher.ts'
-import { PostgresUserRepository } from '../infra/postgres-user-repository.ts'
-import { SmtpEmailSender } from '../infra/smtp-email-sender.ts'
 import type { RegistrationInput, RegistrationResult, StoredUser } from '../types.ts'
+import type { AuditLogger, Clock, FeatureFlags, IdGenerator, NotificationSender, TokenGenerator, UserRepository, PasswordHasher } from './ports.ts'
 
 const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000
+
+export interface RegistrationDependencies {
+  repository: UserRepository
+  emailSender: NotificationSender
+  passwordHasher: PasswordHasher
+  auditLogger: AuditLogger
+  featureFlags: FeatureFlags
+  clock: Clock
+  tokenGenerator: TokenGenerator
+  idGenerator: IdGenerator
+}
 
 /**
  * Alta de usuarios en OfiDocs: valida los datos, crea la cuenta en estado
@@ -13,9 +20,7 @@ const TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000
  * pincha en el enlace.
  */
 export class UserRegistrationService {
-  private readonly repository = new PostgresUserRepository()
-  private readonly emailSender = new SmtpEmailSender()
-  private readonly passwordHasher = new PasswordHasher()
+  constructor(private readonly deps: RegistrationDependencies) {}
 
   register(input: RegistrationInput): RegistrationResult {
     if (!input.email.includes('@')) {
@@ -24,37 +29,37 @@ export class UserRegistrationService {
     if (input.password.length < 8) {
       throw new Error('La contraseña debe tener al menos 8 caracteres')
     }
-    if (this.repository.findByEmail(input.email) !== null) {
-      auditLogger.warn(`Intento de alta duplicada: ${input.email}`)
+    if (this.deps.repository.findByEmail(input.email) !== null) {
+      this.deps.auditLogger.warn(`Intento de alta duplicada: ${input.email}`)
       throw new Error(`Ya existe una cuenta con el email ${input.email}`)
     }
 
-    const now = new Date()
-    const token = Math.random().toString(36).slice(2, 10).toUpperCase()
+    const now = this.deps.clock.now()
+    const token = this.deps.tokenGenerator.generate()
 
     const user: StoredUser = {
-      id: `usr_${now.getTime()}_${Math.floor(Math.random() * 1000)}`,
+      id: `usr_${now.getTime()}_${this.deps.idGenerator.generate()}`,
       email: input.email,
       fullName: input.fullName,
       country: input.country,
-      passwordHash: this.passwordHasher.hash(input.password),
+      passwordHash: this.deps.passwordHasher.hash(input.password),
       confirmationToken: token,
       tokenExpiresAt: new Date(now.getTime() + TOKEN_LIFETIME_MS).toISOString(),
       status: 'pending',
       createdAt: now.toISOString(),
     }
 
-    this.repository.insert(user)
+    this.deps.repository.insert(user)
 
-    if (isFeatureEnabled('WELCOME_EMAIL')) {
-      this.emailSender.send(
+    if (this.deps.featureFlags.isEnabled('WELCOME_EMAIL')) {
+      this.deps.emailSender.send(
         user.email,
         'Confirma tu cuenta en OfiDocs',
         `Hola ${user.fullName}, confirma tu cuenta con este código: ${token}`,
       )
     }
 
-    auditLogger.info(`Usuario registrado: ${user.id}`)
+    this.deps.auditLogger.info(`Usuario registrado: ${user.id}`)
 
     return {
       userId: user.id,
@@ -64,18 +69,18 @@ export class UserRegistrationService {
   }
 
   confirm(token: string): StoredUser {
-    const user = this.repository.findByToken(token)
+    const user = this.deps.repository.findByToken(token)
     if (user === null) {
       throw new Error('Código de confirmación desconocido')
     }
-    if (new Date(user.tokenExpiresAt).getTime() < Date.now()) {
-      auditLogger.warn(`Código caducado para ${user.email}`)
+    if (new Date(user.tokenExpiresAt).getTime() < this.deps.clock.now().getTime()) {
+      this.deps.auditLogger.warn(`Código caducado para ${user.email}`)
       throw new Error('El código de confirmación ha caducado')
     }
 
     const activated: StoredUser = { ...user, status: 'active' }
-    this.repository.update(activated)
-    auditLogger.info(`Usuario activado: ${user.id}`)
+    this.deps.repository.update(activated)
+    this.deps.auditLogger.info(`Usuario activado: ${user.id}`)
 
     return activated
   }
