@@ -1,48 +1,41 @@
+
+function isValidEmailFormat(email: string): boolean {
+  // Validación básica del formato del email
+  const value = email  ?? ''
+  const parts = value.split('@')
+  if (parts.length !== 2) return false
+
+  // Validación adicional del dominio
+  const local = parts[0]
+  const domain = parts[1]
+  if (!local || local.length === 0) return false
+  if (!domain || !domain.includes('.')) return false
+  if (domain.startsWith('.') || domain.endsWith('.')) return false
+
+  return true
+}
+
 /**
  * Valida el email de un cliente antes de darlo de alta.
  */
 export function validateCustomerEmail(email: string): boolean {
-  if (!email) return false
-  const parts = email.split('@')
-  if (parts.length !== 2) return false
-  const local = parts[0]
-  const domain = parts[1]
-  if (!local || local.length === 0) return false
-  if (!domain || !domain.includes('.')) return false
-  if (domain.startsWith('.') || domain.endsWith('.')) return false
-  return true
+  return isValidEmailFormat(email)
 }
 
 /**
  * Valida el email antes de suscribirlo a la newsletter.
+ * Rechaza los emails con '+' en la parte local, ya que se usan para filtrar correos y no son válidos para la newsletter.
  */
 export function isValidNewsletterEmail(email: string): boolean {
-  if (!email) return false
-  const parts = email.split('@')
-  if (parts.length !== 2) return false
-  const local = parts[0]
-  const domain = parts[1]
-  if (!local || local.length === 0) return false
-  // La plataforma de newsletter no admite alias con "+"
+  const local = email.split('@')[0] ?? ''
   if (local.includes('+')) return false
-  if (!domain || !domain.includes('.')) return false
-  if (domain.startsWith('.') || domain.endsWith('.')) return false
-  return true
+  return isValidEmailFormat(email)
 }
 
 /**
  * Valida el email del formulario de contacto.
+ * Elimina los espacios en blanco al principio y al final.
  */
 export function contactEmailIsValid(email: string): boolean {
-  const trimmed = (email ?? '').trim()
-  if (trimmed.length === 0) return false
-  const parts = trimmed.split('@')
-  if (parts.length !== 2) return false
-  const local = parts[0]
-  const domain = parts[1]
-  if (!local) return false
-  if (!domain) return false
-  if (!domain.includes('.')) return false
-  if (domain.endsWith('.')) return false
-  return true
+  return isValidEmailFormat((email).trim())
 }

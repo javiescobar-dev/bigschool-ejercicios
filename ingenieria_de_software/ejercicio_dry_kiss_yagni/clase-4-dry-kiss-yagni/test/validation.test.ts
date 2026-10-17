@@ -47,3 +47,27 @@ describe('contactEmailIsValid', () => {
     expect(contactEmailIsValid('ana@example')).toBe(false)
   })
 })
+
+// Las tres copias habían divergido. Al unificarlas, cada diferencia se clasificó
+// como regla de negocio (se conserva, y este test la fija) o descuido (se corrige).
+
+describe('diferencia conservada: el alias con "+" solo lo rechaza la newsletter', () => {
+  it('el alta de cliente y el contacto sí lo aceptan', () => {
+    expect(validateCustomerEmail('ana+compras@example.com')).toBe(true)
+    expect(contactEmailIsValid('ana+compras@example.com')).toBe(true)
+  })
+})
+
+describe('diferencia corregida: el dominio no empieza ni termina por punto', () => {
+  it('ninguno acepta "ana@.example.com" (el contacto lo admitía por un descuido)', () => {
+    expect(validateCustomerEmail('ana@.example.com')).toBe(false)
+    expect(isValidNewsletterEmail('ana@.example.com')).toBe(false)
+    expect(contactEmailIsValid('ana@.example.com')).toBe(false)
+  })
+
+  it('ninguno acepta "ana@example.com." (igual por el otro extremo)', () => {
+    expect(validateCustomerEmail('ana@example.com.')).toBe(false)
+    expect(isValidNewsletterEmail('ana@example.com.')).toBe(false)
+    expect(contactEmailIsValid('ana@example.com.')).toBe(false)
+  })
+})
