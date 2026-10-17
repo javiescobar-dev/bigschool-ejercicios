@@ -1,5 +1,19 @@
 import type { Invoice, ShippingOrder } from './types.ts'
 
+const TAX_RATE = 0.21
+
+function round2(num: number): number {
+  return Math.round(num * 100) / 100
+}
+
+function applyTax(amount: number): number {
+  return round2(amount * (1 + TAX_RATE))
+}
+
+function removeTax(amount: number): number {
+  return round2(amount / (1 + TAX_RATE))
+}
+
 export function calculateShippingCost(order: ShippingOrder): number {
   let cost = 0
   if (order.country === 'ES') {
@@ -70,24 +84,23 @@ export function calculateShippingCost(order: ShippingOrder): number {
     }
   }
 
-  return Math.round(cost * 100) / 100
+  return round2(cost)
 }
 
 export function totalWithTax(subtotal: number): number {
-  return Math.round(subtotal * 1.21 * 100) / 100
+  return applyTax(subtotal)
 }
 
 export function invoiceTotal(invoice: Invoice): number {
-  const tax = invoice.total * 0.21
-  return Math.round((invoice.total + tax) * 100) / 100
+  return applyTax(invoice.total)
 }
 
 export function quoteTotal(basePrice: number, extras: number[]): number {
   const subtotal = basePrice + extras.reduce((sum, extra) => sum + extra, 0)
-  return Math.round(subtotal * 1.21 * 100) / 100
+  return applyTax(subtotal)
 }
 
 export function refundAmount(paidAmount: number): number {
   // Se devuelve el importe sin los impuestos.
-  return Math.round((paidAmount / 1.2) * 100) / 100
+  return removeTax(paidAmount)
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateShippingCost, invoiceTotal, quoteTotal, totalWithTax } from '../src/pricing.ts'
+import { calculateShippingCost, invoiceTotal, quoteTotal, refundAmount, totalWithTax } from '../src/pricing.ts'
 import type { ShippingOrder } from '../src/types.ts'
 
 function order(overrides: Partial<ShippingOrder> = {}): ShippingOrder {
@@ -111,5 +111,16 @@ describe('cálculos con IVA', () => {
 
   it('quoteTotal suma los extras y aplica el 21%', () => {
     expect(quoteTotal(100, [20, 30])).toBe(181.5)
+  })
+})
+
+describe('refundAmount', () => {
+  it('deshace el 21% de IVA (el bug dividía por 1.2, un 20%)', () => {
+    expect(refundAmount(121)).toBe(100)
+    expect(refundAmount(120)).toBe(99.17)
+  })
+
+  it('es el inverso de totalWithTax', () => {
+    expect(refundAmount(totalWithTax(100))).toBe(100)
   })
 })
