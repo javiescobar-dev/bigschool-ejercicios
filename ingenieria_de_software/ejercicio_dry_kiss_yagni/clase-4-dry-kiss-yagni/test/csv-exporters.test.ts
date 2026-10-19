@@ -72,3 +72,36 @@ describe('exportCustomersCsv', () => {
     )
   })
 })
+
+// Diferencias entre los tres exportadores: la línea final es la única que
+// diverge (suma de importes vs recuento de filas) y el escapado solo se aplica
+// al texto libre. Estos tests fijan esas decisiones.
+
+describe('casos límite y diferencias', () => {
+  it('un export vacío deja la cabecera y un total a cero', () => {
+    expect(exportSalesCsv([])).toBe(['id;fecha;cliente;importe;pais', 'TOTAL;;;0.00;', ''].join('\n'))
+  })
+
+  it('la línea final de clientes es un recuento, no una suma', () => {
+    const csv = exportCustomersCsv([
+      { id: 'C-1', fullName: 'Ana', email: 'ana@example.com', country: 'ES', signedUpAt: '2023-11-20' },
+      { id: 'C-2', fullName: 'Luis', email: 'luis@example.com', country: 'PT', signedUpAt: '2023-11-21' },
+    ])
+
+    expect(csv).toContain('TOTAL;;;2;')
+  })
+
+  it('no escapa el email: solo se escapa el texto libre (nombre, motivo)', () => {
+    const csv = exportCustomersCsv([
+      {
+        id: 'C-1',
+        fullName: 'Ana;García',
+        email: 'ana;raro@example.com',
+        country: 'ES',
+        signedUpAt: '2023-11-20',
+      },
+    ])
+
+    expect(csv).toContain('Ana,García;ana;raro@example.com')
+  })
+})
