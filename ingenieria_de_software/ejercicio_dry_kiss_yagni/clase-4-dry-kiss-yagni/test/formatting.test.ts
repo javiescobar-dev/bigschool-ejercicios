@@ -16,6 +16,10 @@ describe('formatDateSpanish', () => {
   it('acepta también fechas sin hora', () => {
     expect(formatDateSpanish('2024-01-31')).toBe('31 de enero de 2024')
   })
+
+  it('usa "desconocido" si el mes está fuera de rango', () => {
+    expect(formatDateSpanish('2024-13-05')).toBe('5 de desconocido de 2024')
+  })
 })
 
 describe('formatMoney', () => {
@@ -66,5 +70,12 @@ describe('invoiceLabel', () => {
 
   it('etiqueta las anuladas', () => {
     expect(invoiceLabel(invoice({ status: 'cancelled' }))).toBe('Anulada')
+  })
+
+  it('respeta las fronteras exactas de 100 y 1000', () => {
+    expect(invoiceLabel(invoice({ status: 'paid', total: 1000 }))).toBe('Pagada')
+    expect(invoiceLabel(invoice({ status: 'paid', total: 1001 }))).toBe('Pagada (importe alto)')
+    expect(invoiceLabel(invoice({ status: 'paid', total: 100 }))).toBe('Pagada (importe bajo)')
+    expect(invoiceLabel(invoice({ status: 'paid', total: 101 }))).toBe('Pagada')
   })
 })
