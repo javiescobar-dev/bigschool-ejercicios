@@ -1,47 +1,74 @@
 import type { Customer, Refund, Sale } from './types.ts'
 import { formatDateSpanish } from './formatting.ts'
 
-export function exportSalesCsv(sales: Sale[]): string {
-  let csv = 'id;fecha;cliente;importe;pais\n'
-  for (const sale of sales) {
-    let row = ''
-    row += sale.id + ';'
-    row += formatDateSpanish(sale.date) + ';'
-    row += sale.customerName.replace(/;/g, ',') + ';'
-    row += sale.amount.toFixed(2) + ';'
-    row += sale.country
-    csv += row + '\n'
+function csvEscape(value: string): string {
+  return value.replace(/;/g, ',')
+}
+
+function buildCsv(header: string[], rows: string[][], footer: string): string {
+  const csvRows: string[] = []
+
+  csvRows.push(header.join(';'))
+
+  for (const row of rows) {
+    csvRows.push(row.join(';'))
   }
-  csv += 'TOTAL;;;' + sales.reduce((sum, sale) => sum + sale.amount, 0).toFixed(2) + ';\n'
-  return csv
+
+  csvRows.push(footer)
+
+  return csvRows.join('\n') + '\n'
+}
+
+export function exportSalesCsv(sales: Sale[]): string {
+  const rows: string[][] = []
+
+  let total = 0
+  for (const sale of sales) {
+    rows.push([
+      sale.id,
+      formatDateSpanish(sale.date),
+      csvEscape(sale.customerName),
+      sale.amount.toFixed(2),
+      sale.country,
+    ])
+    total += sale.amount
+  }
+
+  const footer = `TOTAL;;;${total.toFixed(2)};`
+  return buildCsv(['id', 'fecha', 'cliente', 'importe', 'pais'], rows, footer)
 }
 
 export function exportRefundsCsv(refunds: Refund[]): string {
-  let csv = 'id;fecha;cliente;importe;motivo\n'
+  const rows: string[][] = []
+  let total = 0
+
   for (const refund of refunds) {
-    let row = ''
-    row += refund.id + ';'
-    row += formatDateSpanish(refund.date) + ';'
-    row += refund.customerName.replace(/;/g, ',') + ';'
-    row += refund.amount.toFixed(2) + ';'
-    row += refund.reason.replace(/;/g, ',')
-    csv += row + '\n'
+    rows.push([
+      refund.id,
+      formatDateSpanish(refund.date),
+      csvEscape(refund.customerName),
+      refund.amount.toFixed(2),
+      csvEscape(refund.reason)
+    ])
+    total += refund.amount
   }
-  csv += 'TOTAL;;;' + refunds.reduce((sum, refund) => sum + refund.amount, 0).toFixed(2) + ';\n'
-  return csv
+
+  const footer = `TOTAL;;;${total.toFixed(2)};`
+  return buildCsv(['id', 'fecha', 'cliente', 'importe', 'motivo'], rows, footer)
 }
 
 export function exportCustomersCsv(customers: Customer[]): string {
-  let csv = 'id;alta;nombre;email;pais\n'
+  const rows: string[][] = []
+
   for (const customer of customers) {
-    let row = ''
-    row += customer.id + ';'
-    row += formatDateSpanish(customer.signedUpAt) + ';'
-    row += customer.fullName.replace(/;/g, ',') + ';'
-    row += customer.email + ';'
-    row += customer.country
-    csv += row + '\n'
+    rows.push([
+      customer.id,
+      formatDateSpanish(customer.signedUpAt),
+      csvEscape(customer.fullName),
+      customer.email,
+      customer.country
+    ])
   }
-  csv += 'TOTAL;;;' + customers.length + ';\n'
-  return csv
+  const footer = `TOTAL;;;${customers.length};`
+  return buildCsv(['id', 'alta', 'nombre', 'email', 'pais'], rows, footer)
 }
