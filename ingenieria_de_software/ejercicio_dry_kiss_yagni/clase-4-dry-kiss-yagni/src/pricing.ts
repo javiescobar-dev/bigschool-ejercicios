@@ -14,76 +14,54 @@ function removeTax(amount: number): number {
   return round2(amount / (1 + TAX_RATE))
 }
 
+type Zone = 'ES' | 'EU' | 'WORLD'
+type Type = 'express' | 'standard'
+type WeightRange = 'light' | 'heavy'          // light = ≤10 kg, heavy = >10 kg
+type Fee = { normal: number; fragile: number }
+
+const COSTS: Record<Zone, Record<Type, Record<WeightRange, Fee>>> = {
+  ES: {
+    express:  { light: { normal: 9.95,  fragile: 14.95 }, heavy: { normal: 24.95, fragile: 29.95 } },
+    standard: { light: { normal: 4.95,  fragile: 7.95  }, heavy: { normal: 8.95,  fragile: 12.95 } },
+  },
+  EU: {
+    express:  { light: { normal: 19.95, fragile: 19.95 }, heavy: { normal: 39.95, fragile: 39.95 } },
+    standard: { light: { normal: 9.95,  fragile: 9.95  }, heavy: { normal: 22.95, fragile: 22.95 } },
+  },
+  WORLD: {
+    express:  { light: { normal: 59.95, fragile: 59.95 }, heavy: { normal: 59.95, fragile: 59.95 } },
+    standard: { light: { normal: 24.95, fragile: 24.95 }, heavy: { normal: 24.95, fragile: 24.95 } },
+  },
+}
+
+const FREE_SHIPPING_THRESHOLD: Partial<Record<Zone, number>> = { ES: 50, EU: 80 }   // WORLD does not have free shipping threshold
+const GIFT_SURCHARGE = 2.5
+
+function zoneOf(country: string): Zone {
+  if (country === 'ES') return 'ES'
+  if (country === 'PT' || country === 'FR' || country === 'IT') return 'EU'
+  return 'WORLD'
+}
+
+function isFreeShipping(zone: Zone, order: ShippingOrder): boolean {
+  if (order.isExpress || order.weightKg > 10) return false   // minimun for free shipping
+  const threshold = FREE_SHIPPING_THRESHOLD[zone]
+  return threshold !== undefined && order.subtotal >= threshold
+}
+
 export function calculateShippingCost(order: ShippingOrder): number {
-  let cost = 0
-  if (order.country === 'ES') {
-    if (order.isExpress) {
-      if (order.weightKg > 10) {
-        if (order.isFragile) {
-          cost = 29.95
-        } else {
-          cost = 24.95
-        }
-      } else {
-        if (order.isFragile) {
-          cost = 14.95
-        } else {
-          cost = 9.95
-        }
-      }
-    } else {
-      if (order.weightKg > 10) {
-        if (order.isFragile) {
-          cost = 12.95
-        } else {
-          cost = 8.95
-        }
-      } else {
-        if (order.subtotal >= 50) {
-          cost = 0
-        } else {
-          if (order.isFragile) {
-            cost = 7.95
-          } else {
-            cost = 4.95
-          }
-        }
-      }
-    }
-  } else if (order.country === 'PT' || order.country === 'FR' || order.country === 'IT') {
-    if (order.isExpress) {
-      if (order.weightKg > 10) {
-        cost = 39.95
-      } else {
-        cost = 19.95
-      }
-    } else {
-      if (order.weightKg > 10) {
-        cost = 22.95
-      } else {
-        if (order.subtotal >= 80) {
-          cost = 0
-        } else {
-          cost = 9.95
-        }
-      }
-    }
-  } else {
-    if (order.isExpress) {
-      cost = 59.95
-    } else {
-      cost = 24.95
-    }
+  const zone = zoneOf(order.country)
+
+  if (isFreeShipping(zone, order)) {
+    return order.isGift ? GIFT_SURCHARGE : 0
   }
 
-  if (order.isGift) {
-    if (cost > 0) {
-      cost = cost + 2.5
-    } else {
-      cost = 2.5
-    }
-  }
+  const type = order.isExpress ? 'express' : 'standard'
+  const weightRange = order.weightKg > 10 ? 'heavy' : 'light'
+  const fee = COSTS[zone][type][weightRange]
 
+  let cost = order.isFragile ? fee.fragile : fee.normal
+  if (order.isGift) cost += GIFT_SURCHARGE
   return round2(cost)
 }
 
