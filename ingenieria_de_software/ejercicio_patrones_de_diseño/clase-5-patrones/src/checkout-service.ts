@@ -1,4 +1,4 @@
-import { PaymentsGatewayV1, type LegacyPaymentRequest } from './legacy/payments-gateway-v1.ts'
+import { PaymentsGatewayV1 } from './legacy/payments-gateway-v1.ts'
 import { Order } from './order.ts'
 import {
   analyticsService,
@@ -8,6 +8,8 @@ import {
   warehouseService,
 } from './notifications/side-effects.ts'
 import type { CheckoutRequest, CheckoutResult, TicketType } from './types.ts'
+import { LegacyGatewayAdapter } from './payments/legacy-gateway-adapter.ts'
+import type { ChargeGateway, ChargeRequest, ChargeResult } from './payments/gateway.ts'
 
 export interface CheckoutOptions {
   withLogging: boolean
@@ -34,10 +36,13 @@ export class CheckoutService {
   private readonly responseCache = new Map<string, CheckoutResult>()
   readonly logLines: string[] = []
 
+  private readonly gateway: ChargeGateway
+
   constructor(
-    private readonly gateway: PaymentsGatewayV1 = new PaymentsGatewayV1(),
+    legacyGateway: PaymentsGatewayV1 = new PaymentsGatewayV1(),
     options: Partial<CheckoutOptions> = {},
   ) {
+    this.gateway = new LegacyGatewayAdapter(legacyGateway)
     this.options = { ...DEFAULT_OPTIONS, ...options }
   }
 
@@ -99,48 +104,50 @@ export class CheckoutService {
       case 'card': {
         const fee = discounted * 0.015
         amountCharged = Math.round((discounted + fee) * 100) / 100
-        const response = this.callGateway({
-          AMOUNT_IN_CENTS: Math.round(amountCharged * 100),
-          CURRENCY_CODE: 'EUR',
-          OPERATION: 'SALE',
-          CARD_TOKEN: request.cardToken ?? undefined,
-          META: `order=${request.orderId};event=${request.eventId};qty=${request.quantity}`,
+
+        const result = this.callGateway({
+          amountInCents: Math.round(amountCharged * 100),
+          currency: 'EUR',
+          operation: 'SALE',
+          cardToken: request.cardToken ?? undefined,
+          meta: `order=${request.orderId};event=${request.eventId};qty=${request.quantity}`,
         })
-        if (response.RESULT_CODE !== '00') {
+        if (!result.ok) {
           order.cancel()
           return {
             orderId: request.orderId,
             status: order.status,
             amountCharged: 0,
             authorizationCode: null,
-            message: this.translateGatewayCode(response.RESULT_CODE),
+            message: result.message,
           }
         }
-        authorizationCode = response.AUTH_CODE ?? null
+        authorizationCode = result.authorizationCode
         message = 'Pago con tarjeta aceptado'
         break
       }
 
       case 'wallet': {
         amountCharged = Math.round(discounted * 100) / 100
-        const response = this.callGateway({
-          AMOUNT_IN_CENTS: Math.round(amountCharged * 100),
-          CURRENCY_CODE: 'EUR',
-          OPERATION: 'SALE',
-          ACCOUNT_ID: request.walletAccountId ?? undefined,
-          META: `order=${request.orderId};event=${request.eventId};qty=${request.quantity}`,
+
+        const result = this.callGateway({
+          amountInCents: Math.round(amountCharged * 100),
+          currency: 'EUR',
+          operation: 'SALE',
+          accountId: request.walletAccountId ?? undefined,
+          meta: `order=${request.orderId};event=${request.eventId};qty=${request.quantity}`,
         })
-        if (response.RESULT_CODE !== '00') {
+        if (!result.ok) {
           order.cancel()
           return {
             orderId: request.orderId,
             status: order.status,
             amountCharged: 0,
             authorizationCode: null,
-            message: this.translateGatewayCode(response.RESULT_CODE),
+            message: result.message,
           }
         }
-        authorizationCode = response.AUTH_CODE ?? null
+        authorizationCode = result.authorizationCode
         message = 'Pago con monedero aceptado'
         break
       }
@@ -193,33 +200,25 @@ export class CheckoutService {
 
     return result
   }
-
-  private callGateway(legacyRequest: LegacyPaymentRequest) {
+  private callGateway(request: ChargeRequest): ChargeResult {
     if (this.options.withLogging) {
-      this.logLines.push(`[gateway] ${legacyRequest.OPERATION} ${legacyRequest.AMOUNT_IN_CENTS}`)
+      this.logLines.push(`[gateway] ${request.operation} ${request.amountInCents}`)
     }
 
-    if (!this.options.withRetry) {
-      return this.gateway.execute(legacyRequest)
-    }
+    let result = this.gateway.charge(request)
 
-    let lastResponse = this.gateway.execute(legacyRequest)
-    let attempt = 1
-    while (lastResponse.RESULT_CODE === '99' && attempt < this.options.retryAttempts) {
-      attempt += 1
-      if (this.options.withLogging) {
-        this.logLines.push(`[gateway] reintento ${attempt}`)
+    if (this.options.withRetry) {
+      let attempt = 1
+      while (!result.ok && result.retryable && attempt < this.options.retryAttempts) {
+        attempt += 1
+        if (this.options.withLogging) {
+          this.logLines.push(`[gateway] reintento ${attempt}`)
+        }
+        result = this.gateway.charge(request)
       }
-      lastResponse = this.gateway.execute(legacyRequest)
     }
-    return lastResponse
-  }
 
-  private translateGatewayCode(code: string): string {
-    if (code === '05') return 'Tarjeta rechazada por el banco emisor'
-    if (code === '51') return 'Fondos insuficientes'
-    if (code === '99') return 'La pasarela de pago no responde'
-    return 'Error desconocido en la pasarela'
+    return result
   }
 }
 
