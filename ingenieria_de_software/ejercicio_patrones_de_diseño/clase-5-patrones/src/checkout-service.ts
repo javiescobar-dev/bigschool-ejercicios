@@ -1,17 +1,12 @@
 import { PaymentsGatewayV1 } from './legacy/payments-gateway-v1.ts'
 import { Order } from './order.ts'
-import {
-  analyticsService,
-  emailService,
-  inventoryService,
-  loyaltyService,
-  warehouseService,
-} from './notifications/side-effects.ts'
 import type { CheckoutRequest, CheckoutResult, PaymentMethod, TicketType } from './types.ts'
 import { LegacyGatewayAdapter } from './payments/legacy-gateway-adapter.ts'
 import type { ChargeGateway, ChargeRequest, ChargeResult } from './payments/gateway.ts'
 import type { PaymentStrategy } from './payments/payment-strategy.ts'
 import { defaultPaymentStrategies } from './payments/strategies/index.ts'
+import type { PurchaseObserver, PurchaseEvent } from './notifications/purchase-observer.ts'
+import { defaultPurchaseObservers } from './notifications/observers/index.ts'
 
 export interface CheckoutOptions {
   withLogging: boolean
@@ -40,17 +35,20 @@ export class CheckoutService {
 
   private readonly gateway: ChargeGateway
   private readonly strategies: Map<PaymentMethod, PaymentStrategy>
+  private readonly observers: PurchaseObserver[]
 
   constructor(
     legacyGateway: PaymentsGatewayV1 = new PaymentsGatewayV1(),
     options: Partial<CheckoutOptions> = {},
     strategies: PaymentStrategy[] = defaultPaymentStrategies(),
+    observers: PurchaseObserver[] = defaultPurchaseObservers(),
   ) {
     this.gateway = new LegacyGatewayAdapter(legacyGateway)
     this.options = { ...DEFAULT_OPTIONS, ...options }
     this.strategies = new Map(
       strategies.map((strategy): [PaymentMethod, PaymentStrategy] => [strategy.method, strategy]),
     )
+    this.observers = observers
   }
 
   checkout(request: CheckoutRequest): CheckoutResult {
@@ -116,16 +114,18 @@ export class CheckoutService {
     order.issueTickets()
 
     // ---------- Avisar a todo el mundo ----------
-    emailService.sendPurchaseConfirmation(request.customerEmail, request.orderId)
-    analyticsService.track('ticket_purchased', {
+    const purchaseEvent: PurchaseEvent = {
       orderId: request.orderId,
       eventId: request.eventId,
-      amount: outcome.amountCharged,
-      method: request.paymentMethod,
-    })
-    inventoryService.release(request.eventId, request.quantity)
-    loyaltyService.award(request.customerEmail, Math.floor(outcome.amountCharged))
-    warehouseService.schedulePrinting(request.orderId, request.quantity)
+      customerEmail: request.customerEmail,
+      quantity: request.quantity,
+      amountCharged: outcome.amountCharged,
+      paymentMethod: request.paymentMethod,
+    }
+
+    for (const observer of this.observers) {
+      observer.onPurchase(purchaseEvent)
+    }
 
     if (this.options.withLogging) {
       this.logLines.push(`[checkout] fin ${request.orderId} -> ${order.status} (${outcome.amountCharged} EUR)`)
