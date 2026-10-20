@@ -2,6 +2,7 @@ import type { CheckoutRequest, PaymentMethod } from '../types.ts'
 import type { ChargeRequest, ChargeResult } from './gateway.ts'
 
 export type ChargeFn = (request: ChargeRequest) => ChargeResult
+export type ApprovedPayment = Extract<PaymentOutcome, { ok: true }>
 
 export type PaymentOutcome =
   | {

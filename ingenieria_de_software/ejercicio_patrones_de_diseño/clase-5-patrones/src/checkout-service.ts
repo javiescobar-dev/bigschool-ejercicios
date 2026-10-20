@@ -3,7 +3,7 @@ import { Order } from './order.ts'
 import type { CheckoutRequest, CheckoutResult, PaymentMethod, TicketType } from './types.ts'
 import { LegacyGatewayAdapter } from './payments/legacy-gateway-adapter.ts'
 import type { ChargeGateway, ChargeRequest, ChargeResult } from './payments/gateway.ts'
-import type { PaymentStrategy } from './payments/payment-strategy.ts'
+import type { ApprovedPayment, PaymentStrategy } from './payments/payment-strategy.ts'
 import { defaultPaymentStrategies } from './payments/strategies/index.ts'
 import type { PurchaseObserver, PurchaseEvent } from './notifications/purchase-observer.ts'
 import { defaultPurchaseObservers } from './notifications/observers/index.ts'
@@ -52,18 +52,66 @@ export class CheckoutService {
   }
 
   checkout(request: CheckoutRequest): CheckoutResult {
-    if (this.options.withCache) {
-      const cached = this.responseCache.get(request.orderId)
-      if (cached) {
-        if (this.options.withLogging) this.logLines.push(`[cache] hit ${request.orderId}`)
-        return cached
-      }
+    const cached = this.readCache(request)
+    if (cached) return cached
+
+    this.logStart(request)
+
+    const strategy = this.validatedStrategy(request)
+    const amount = this.price(request)
+
+    const order = new Order(request.orderId)
+    order.reserve()
+
+    const outcome = strategy.charge(amount, request, (chargeRequest) =>
+      this.callGateway(chargeRequest),
+    )
+
+    if (!outcome.ok) {
+      order.cancel()
+      return this.failureResult(request, order, outcome.message)
     }
+
+    order.markPaid()
+    order.issueTickets()
+
+    this.notify(request, outcome.amountCharged)
+    this.logEnd(request, order, outcome.amountCharged)
+
+    const result = this.successResult(request, order, outcome)
+    this.writeCache(request, result)
+    return result
+  }
+
+  private readCache(request: CheckoutRequest): CheckoutResult | null {
+    if (!this.options.withCache) return null
+
+    const cached = this.responseCache.get(request.orderId)
+    if (cached && this.options.withLogging) {
+      this.logLines.push(`[cache] hit ${request.orderId}`)
+    }
+    return cached ?? null
+  }
+
+  private writeCache(request: CheckoutRequest, result: CheckoutResult): void {
+    if (this.options.withCache) {
+      this.responseCache.set(request.orderId, result)
+    }
+  }
+
+  private logStart(request: CheckoutRequest): void {
     if (this.options.withLogging) {
       this.logLines.push(`[checkout] inicio ${request.orderId} (${request.paymentMethod})`)
     }
+  }
 
-    // ---------- Validaciones ----------
+  private logEnd(request: CheckoutRequest, order: Order, amountCharged: number): void {
+    if (this.options.withLogging) {
+      this.logLines.push(`[checkout] fin ${request.orderId} -> ${order.status} (${amountCharged} EUR)`)
+    }
+  }
+
+  private validatedStrategy(request: CheckoutRequest): PaymentStrategy {
     if (!request.customerEmail.includes('@')) {
       throw new Error(`Email inválido: ${request.customerEmail}`)
     }
@@ -82,69 +130,63 @@ export class CheckoutService {
     if (request.isGift && request.quantity > 1) {
       throw new Error('Los pedidos de regalo solo admiten una entrada')
     }
+
     const strategy = this.strategies.get(request.paymentMethod)
     if (!strategy) throw new Error(`Método de pago no soportado: ${request.paymentMethod}`)
-    strategy.validate(request)
 
-    // ---------- Importe ----------
+    strategy.validate(request)
+    return strategy
+  }
+
+  private price(request: CheckoutRequest): number {
     const basePrice = BASE_PRICES[request.ticketType]
     const gross = basePrice * request.quantity
-    const discounted = gross - (gross * request.discountPercentage) / 100
+    return gross - (gross * request.discountPercentage) / 100
+  }
 
-    const order = new Order(request.orderId)
-    order.reserve()
-
-    // ---------- Cobro ----------
-    const outcome = strategy.charge(discounted, request, (chargeRequest) =>
-      this.callGateway(chargeRequest),
-    )
-
-    if (!outcome.ok) {
-      order.cancel()
-      return {
-        orderId: request.orderId,
-        status: order.status,
-        amountCharged: 0,
-        authorizationCode: null,
-        message: outcome.message,
-      }
-    }
-
-    order.markPaid()
-    order.issueTickets()
-
-    // ---------- Avisar a todo el mundo ----------
+  private notify(request: CheckoutRequest, amountCharged: number): void {
     const purchaseEvent: PurchaseEvent = {
       orderId: request.orderId,
       eventId: request.eventId,
       customerEmail: request.customerEmail,
       quantity: request.quantity,
-      amountCharged: outcome.amountCharged,
+      amountCharged,
       paymentMethod: request.paymentMethod,
     }
 
     for (const observer of this.observers) {
       observer.onPurchase(purchaseEvent)
     }
+  }
 
-    if (this.options.withLogging) {
-      this.logLines.push(`[checkout] fin ${request.orderId} -> ${order.status} (${outcome.amountCharged} EUR)`)
+  private failureResult(
+    request: CheckoutRequest,
+    order: Order,
+    message: string,
+  ): CheckoutResult {
+    return {
+      orderId: request.orderId,
+      status: order.status,
+      amountCharged: 0,
+      authorizationCode: null,
+      message,
     }
+  }
 
-    const result: CheckoutResult = {
+  private successResult(
+    request: CheckoutRequest,
+    order: Order,
+    outcome: ApprovedPayment,
+  ): CheckoutResult {
+    return {
       orderId: request.orderId,
       status: order.status,
       amountCharged: outcome.amountCharged,
       authorizationCode: outcome.authorizationCode,
       message: outcome.message,
     }
-
-    if (this.options.withCache) {
-      this.responseCache.set(request.orderId, result)
-    }
-
-    return result
   }
+
   private callGateway(request: ChargeRequest): ChargeResult {
     if (this.options.withLogging) {
       this.logLines.push(`[gateway] ${request.operation} ${request.amountInCents}`)
