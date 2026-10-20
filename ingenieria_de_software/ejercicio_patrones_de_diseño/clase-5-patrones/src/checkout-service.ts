@@ -7,9 +7,11 @@ import {
   loyaltyService,
   warehouseService,
 } from './notifications/side-effects.ts'
-import type { CheckoutRequest, CheckoutResult, TicketType } from './types.ts'
+import type { CheckoutRequest, CheckoutResult, PaymentMethod, TicketType } from './types.ts'
 import { LegacyGatewayAdapter } from './payments/legacy-gateway-adapter.ts'
 import type { ChargeGateway, ChargeRequest, ChargeResult } from './payments/gateway.ts'
+import type { PaymentStrategy } from './payments/payment-strategy.ts'
+import { defaultPaymentStrategies } from './payments/strategies/index.ts'
 
 export interface CheckoutOptions {
   withLogging: boolean
@@ -37,13 +39,18 @@ export class CheckoutService {
   readonly logLines: string[] = []
 
   private readonly gateway: ChargeGateway
+  private readonly strategies: Map<PaymentMethod, PaymentStrategy>
 
   constructor(
     legacyGateway: PaymentsGatewayV1 = new PaymentsGatewayV1(),
     options: Partial<CheckoutOptions> = {},
+    strategies: PaymentStrategy[] = defaultPaymentStrategies(),
   ) {
     this.gateway = new LegacyGatewayAdapter(legacyGateway)
     this.options = { ...DEFAULT_OPTIONS, ...options }
+    this.strategies = new Map(
+      strategies.map((strategy): [PaymentMethod, PaymentStrategy] => [strategy.method, strategy]),
+    )
   }
 
   checkout(request: CheckoutRequest): CheckoutResult {
@@ -77,15 +84,9 @@ export class CheckoutService {
     if (request.isGift && request.quantity > 1) {
       throw new Error('Los pedidos de regalo solo admiten una entrada')
     }
-    if (request.paymentMethod === 'card' && !request.cardToken) {
-      throw new Error('Falta el token de la tarjeta')
-    }
-    if (request.paymentMethod === 'wallet' && !request.walletAccountId) {
-      throw new Error('Falta la cuenta del monedero')
-    }
-    if (request.paymentMethod === 'voucher' && !request.voucherCode) {
-      throw new Error('Falta el código del bono')
-    }
+    const strategy = this.strategies.get(request.paymentMethod)
+    if (!strategy) throw new Error(`Método de pago no soportado: ${request.paymentMethod}`)
+    strategy.validate(request)
 
     // ---------- Importe ----------
     const basePrice = BASE_PRICES[request.ticketType]
@@ -96,74 +97,18 @@ export class CheckoutService {
     order.reserve()
 
     // ---------- Cobro ----------
-    let amountCharged = 0
-    let authorizationCode: string | null = null
-    let message = ''
+    const outcome = strategy.charge(discounted, request, (chargeRequest) =>
+      this.callGateway(chargeRequest),
+    )
 
-    switch (request.paymentMethod) {
-      case 'card': {
-        const fee = discounted * 0.015
-        amountCharged = Math.round((discounted + fee) * 100) / 100
-
-        const result = this.callGateway({
-          amountInCents: Math.round(amountCharged * 100),
-          currency: 'EUR',
-          operation: 'SALE',
-          cardToken: request.cardToken ?? undefined,
-          meta: `order=${request.orderId};event=${request.eventId};qty=${request.quantity}`,
-        })
-        if (!result.ok) {
-          order.cancel()
-          return {
-            orderId: request.orderId,
-            status: order.status,
-            amountCharged: 0,
-            authorizationCode: null,
-            message: result.message,
-          }
-        }
-        authorizationCode = result.authorizationCode
-        message = 'Pago con tarjeta aceptado'
-        break
-      }
-
-      case 'wallet': {
-        amountCharged = Math.round(discounted * 100) / 100
-
-        const result = this.callGateway({
-          amountInCents: Math.round(amountCharged * 100),
-          currency: 'EUR',
-          operation: 'SALE',
-          accountId: request.walletAccountId ?? undefined,
-          meta: `order=${request.orderId};event=${request.eventId};qty=${request.quantity}`,
-        })
-        if (!result.ok) {
-          order.cancel()
-          return {
-            orderId: request.orderId,
-            status: order.status,
-            amountCharged: 0,
-            authorizationCode: null,
-            message: result.message,
-          }
-        }
-        authorizationCode = result.authorizationCode
-        message = 'Pago con monedero aceptado'
-        break
-      }
-
-      case 'transfer': {
-        amountCharged = Math.round(discounted * 100) / 100
-        authorizationCode = null
-        message = 'Transferencia pendiente de confirmación bancaria'
-        break
-      }
-
-      case 'voucher': {
-        amountCharged = 0
-        authorizationCode = `VOUCHER-${request.voucherCode}`
-        message = 'Pedido cubierto íntegramente con un bono'
-        break
+    if (!outcome.ok) {
+      order.cancel()
+      return {
+        orderId: request.orderId,
+        status: order.status,
+        amountCharged: 0,
+        authorizationCode: null,
+        message: outcome.message,
       }
     }
 
@@ -175,23 +120,23 @@ export class CheckoutService {
     analyticsService.track('ticket_purchased', {
       orderId: request.orderId,
       eventId: request.eventId,
-      amount: amountCharged,
+      amount: outcome.amountCharged,
       method: request.paymentMethod,
     })
     inventoryService.release(request.eventId, request.quantity)
-    loyaltyService.award(request.customerEmail, Math.floor(amountCharged))
+    loyaltyService.award(request.customerEmail, Math.floor(outcome.amountCharged))
     warehouseService.schedulePrinting(request.orderId, request.quantity)
 
     if (this.options.withLogging) {
-      this.logLines.push(`[checkout] fin ${request.orderId} -> ${order.status} (${amountCharged} EUR)`)
+      this.logLines.push(`[checkout] fin ${request.orderId} -> ${order.status} (${outcome.amountCharged} EUR)`)
     }
 
     const result: CheckoutResult = {
       orderId: request.orderId,
       status: order.status,
-      amountCharged,
-      authorizationCode,
-      message,
+      amountCharged: outcome.amountCharged,
+      authorizationCode: outcome.authorizationCode,
+      message: outcome.message,
     }
 
     if (this.options.withCache) {
