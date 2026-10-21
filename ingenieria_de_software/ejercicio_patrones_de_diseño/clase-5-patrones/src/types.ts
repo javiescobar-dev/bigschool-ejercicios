@@ -1,5 +1,5 @@
 export type TicketType = 'general' | 'vip' | 'early-bird'
-export type PaymentMethod = 'card' | 'wallet' | 'transfer' | 'voucher'
+export type PaymentMethod = 'card' | 'wallet' | 'transfer' | 'voucher' | 'apple-pay'
 
 export interface CheckoutRequest {
   orderId: string
@@ -10,6 +10,7 @@ export interface CheckoutRequest {
   quantity: number
   paymentMethod: PaymentMethod
   cardToken: string | null
+  applePayToken?: string | null
   walletAccountId: string | null
   voucherCode: string | null
   discountPercentage: number

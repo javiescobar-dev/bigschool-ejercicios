@@ -1,4 +1,5 @@
 import type { PaymentStrategy } from '../payment-strategy.ts'
+import { ApplePayPaymentStrategy } from './apple-pay-strategy.ts'
 import { CardPaymentStrategy } from './card-strategy.ts'
 import { TransferPaymentStrategy } from './transfer-strategy.ts'
 import { VoucherPaymentStrategy } from './voucher-strategy.ts'
@@ -10,5 +11,6 @@ export function defaultPaymentStrategies(): PaymentStrategy[] {
     new WalletPaymentStrategy(),
     new TransferPaymentStrategy(),
     new VoucherPaymentStrategy(),
+    new ApplePayPaymentStrategy(),
   ]
 }
