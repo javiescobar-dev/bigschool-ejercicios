@@ -1,31 +1,31 @@
-import { CheckoutService, createCheckoutRequest } from './checkout-service.ts'
+import { CheckoutService } from './checkout-service.ts'
 import { PaymentsGatewayV1 } from './legacy/payments-gateway-v1.ts'
 import { Order } from './order.ts'
 import { analyticsEvents, mailbox, printQueue } from './notifications/side-effects.ts'
+import type { CheckoutRequest } from './types.ts'
 
 const gateway = new PaymentsGatewayV1()
 const service = new CheckoutService(gateway, { withLogging: true, withRetry: true, retryAttempts: 3 })
 
-// Catorce parámetros posicionales. Suerte adivinando cuál es cuál.
-const peticion = createCheckoutRequest(
-  'ORD-2045',
-  'EVT-9',
-  'ana@example.com',
-  'Ana García',
-  'vip',
-  2,
-  'card',
-  'TOK_FLAKY',
-  null,
-  null,
-  10,
-  false,
-  null,
-  true,
-)
+const peticionTarjeta: CheckoutRequest = {
+  orderId: 'ORD-2045',
+  eventId: 'EVT-9',
+  customerEmail: 'ana@example.com',
+  customerName: 'Ana García',
+  ticketType: 'vip',
+  quantity: 2,
+  paymentMethod: 'card',
+  cardToken: 'TOK_FLAKY',
+  walletAccountId: null,
+  voucherCode: null,
+  discountPercentage: 10,
+  isGift: false,
+  giftMessage: null,
+  marketingOptIn: true,
+}
 
 console.log('--- Compra ---')
-console.log(service.checkout(peticion))
+console.log(service.checkout(peticionTarjeta))
 
 console.log('\n--- Log interno ---')
 for (const linea of service.logLines) console.log(linea)
