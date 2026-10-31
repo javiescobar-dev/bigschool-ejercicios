@@ -10,4 +10,8 @@ export class EmployeeId {
 
         return new EmployeeId(value.trim());
     }
+
+    static isEqual(firstValue: EmployeeId, secondValue: EmployeeId) : boolean {
+        return firstValue.value === secondValue.value;
+    }
 }

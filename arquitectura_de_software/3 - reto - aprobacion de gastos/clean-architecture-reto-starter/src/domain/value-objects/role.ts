@@ -15,4 +15,16 @@ export class Role {
 
         return new Role(value as RoleType);
     }
+
+    isManager(): boolean {
+        return this.value === "Manager";
+    }
+
+    isFinance(): boolean {
+        return this.value === "Finance";
+    }
+
+    isEmployee(): boolean {
+        return this.value === "Employee";
+    }
 }
