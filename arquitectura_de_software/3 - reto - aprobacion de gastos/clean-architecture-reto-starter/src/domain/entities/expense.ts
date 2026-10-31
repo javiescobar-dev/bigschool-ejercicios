@@ -96,4 +96,8 @@ export class Expense {
             );
         }
     }
+
+    getStatus(): ExpenseStatus {
+        return this.status;
+    }
 }
