@@ -100,4 +100,8 @@ export class Expense {
     getStatus(): ExpenseStatus {
         return this.status;
     }
+
+    getDecision(): Decision | undefined {
+        return this.decision;
+    }
 }
